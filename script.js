@@ -1,193 +1,161 @@
-const wordList = ['APPLE', 'MANGO', 'GRAPE', 'BANANA', 'PEACH'];
-let secretWord = wordList[Math.floor(Math.random() * wordList.length)];
-let currentGuess = '';
-let currentRow = 0;
-let timer; // Timer variable
-let secondsElapsed = 0; // Seconds counter
-
-const board = document.getElementById('game-board');
-const messageDisplay = document.getElementById('message'); // Message area
-const timerDisplay = document.getElementById('timer'); // Timer display area
-
-for (let i = 0; i < 6; i++) {
-    for (let j = 0; j < 5; j++) {
-        const tile = document.createElement('div');
-        tile.className = 'tile';
-        tile.id = `row-${i}-col-${j}`;
-        board.appendChild(tile);
-    }
-}
-
-// Event listener for physical keyboard inputs
-document.addEventListener('keydown', handlePhysicalKeyPress);
-
-document.querySelectorAll('.key').forEach(key => {
-    key.addEventListener('click', () => {
-        handleKeyPress(key.innerText);
-    });
-});
-
-function handlePhysicalKeyPress(event) {
-    const key = event.key.toUpperCase();
-    if (key === 'ENTER') {
-        if (currentGuess.length === 5) {
-            checkWordValidity(currentGuess);
-        } else {
-            displayMessage('Word must be 5 letters long!');
-        }
-    } else if (key === 'BACKSPACE') {
-        removeLastLetter();
-    } else if (/^[A-Z]$/.test(key) && currentGuess.length < 5) { // Allow only letters A-Z
-        addLetter(key);
-    }
-}
-
-function handleKeyPress(key) {
-    if (key === 'Enter') {
-        if (currentGuess.length === 5) {
-            checkWordValidity(currentGuess);
-        } else {
-            displayMessage('Word must be 5 letters long!');
-        }
-    } else if (key === 'Backspace') {
-        removeLastLetter();
-    } else if (currentGuess.length < 5) {
-        addLetter(key);
-    }
-}
-
-function addLetter(letter) {
-    currentGuess += letter;
-    const tile = document.getElementById(`row-${currentRow}-col-${currentGuess.length - 1}`);
-    tile.innerText = letter;
-
-    // Start the timer on the first letter entry
-    if (currentGuess.length === 1 && !timer) {
-        startTimer();
-    }
-}
-
-function removeLastLetter() {
-    if (currentGuess.length > 0) {
-        // Remove the last letter from currentGuess
-        currentGuess = currentGuess.slice(0, -1);
-        // Get the last tile index
-        const tileIndex = currentGuess.length; // The index of the last filled tile
-        const tile = document.getElementById(`row-${currentRow}-col-${tileIndex}`);
-        tile.innerText = ''; // Clear the tile content
-    }
-}
-
-// Timer functions
-function startTimer() {
+const words = [
+    "PLANE", "APPLE", "GRAPE", "HOUSE", "FLAME", "CLOUD", "SHINE", 
+    "CRANE", "TIGER", "HAPPY", "BRAVE", "SNAKE", "WATER", "PEACE", 
+    "SMILE", "LIGHT", "STORM", "EARTH", "FLOOR", "SWEET", // Add more words as needed
+  ];
+  
+  const targetWord = words[Math.floor(Math.random() * words.length)]; // Randomly select a word
+  let currentGuess = "";
+  let currentRow = 0;
+  let attempts = 6;
+  let timer;
+  let timeInSeconds = 0;
+  let timerStarted = false;
+  
+  // Function to check if the word is valid using Free Dictionary API
+  async function isValidWord(word) {
+    const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
+    return response.ok;
+  }
+  
+  // Initialize grid
+  const grid = document.getElementById("grid");
+  for (let i = 0; i < attempts * 5; i++) {
+    const cell = document.createElement("div");
+    cell.classList.add("cell");
+    grid.appendChild(cell);
+  }
+  
+  // Display message function
+  function displayMessage(message) {
+    const messageEl = document.getElementById("message");
+    messageEl.textContent = message;
+    messageEl.style.opacity = "1";
+    setTimeout(() => { messageEl.style.opacity = "0"; }, 2000);
+  }
+  
+  // Timer display function
+  function startTimer() {
     timer = setInterval(() => {
-        secondsElapsed++;
-        updateTimerDisplay();
+      timeInSeconds++;
+      const minutes = Math.floor(timeInSeconds / 60);
+      const seconds = timeInSeconds % 60;
+      document.getElementById("timer").textContent = `Time: ${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
     }, 1000);
-}
-
-function updateTimerDisplay() {
-    timerDisplay.innerText = `Time: ${secondsElapsed}s`;
-}
-
-// Fetch the word validity from Datamuse API
-function checkWordValidity(word) {
-    fetch(`https://api.datamuse.com/words?sp=${word}&max=1`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.length > 0 && data[0].word.toUpperCase() === word) {
-                checkGuess();
-            } else {
-                displayMessage("Word does not exist!");
-                currentGuess = ''; // Clear the current guess after invalid word
-                for (let i = 0; i < 5; i++) {
-                    const tile = document.getElementById(`row-${currentRow}-col-${i}`);
-                    tile.innerText = ''; // Clear the row tiles
-                }
+  }
+  
+  // Stop the timer function
+  function stopTimer() {
+    clearInterval(timer);
+  }
+  
+  // Update the timer to add 30 seconds on each attempt
+  function addExtraTime() {
+    timeInSeconds += 30;
+  }
+  
+  // Handle keyboard input
+  document.addEventListener("keydown", handleKeyPress);
+  document.querySelectorAll(".key").forEach(button => button.addEventListener("click", () => handleKeyPress({ key: button.textContent })));
+  
+  // Main keyboard and grid input function
+  function handleKeyPress(event) {
+    const key = event.key.toUpperCase();
+  
+    if (key === "ENTER") {
+      if (currentGuess.length === 5) {
+        isValidWord(currentGuess).then(valid => {
+          if (valid) {
+            if (!timerStarted) {
+              startTimer();
+              timerStarted = true;
             }
-        })
-        .catch(error => {
-            console.error('Error checking word validity:', error);
+            checkGuess();
+            currentGuess = "";
+            currentRow++; // Move to next row only if the word is valid
+            addExtraTime();
+          } else {
+            displayMessage("Word not found");
+            shakeRow(currentRow);
+          }
         });
-}
-
-// Display messages in the message area
-function displayMessage(message) {
-    messageDisplay.innerText = message;
-    messageDisplay.style.display = 'block'; // Ensure the message is visible
-}
-
-// Update key colors based on the guess
-function updateKeyColors(guessArray, secretArray, colorCodes) {
+      } else {
+        displayMessage("Enter a 5-letter word");
+        shakeRow(currentRow);
+      }
+    } else if (key === "BACKSPACE") {
+      currentGuess = currentGuess.slice(0, -1);
+      updateGrid();
+    } else if (/^[A-Z]$/.test(key) && currentGuess.length < 5) {
+      currentGuess += key;
+      updateGrid();
+    }
+  }
+  
+  // Update the grid display
+  function updateGrid() {
+    const cells = document.querySelectorAll(".cell");
+    for (let i = 0; i < 5; i++) {
+      const cell = cells[currentRow * 5 + i];
+      cell.textContent = currentGuess[i] || "";
+    }
+  }
+  
+  // Check the guessed word, apply animations, and update keyboard colors
+  function checkGuess() {
+    const cells = document.querySelectorAll(".cell");
+    const guessArray = currentGuess.split("");
+  
     guessArray.forEach((letter, index) => {
-        const keyElement = document.querySelector(`.key[data-letter="${letter}"]`);
-        if (keyElement) {
-            if (colorCodes[index] === 'green') {
-                keyElement.style.backgroundColor = 'green'; // Correct letter in the correct position
-            } else if (colorCodes[index] === 'yellow') {
-                keyElement.style.backgroundColor = 'yellow'; // Correct letter in the wrong position
-            } else {
-                keyElement.style.backgroundColor = 'gray'; // Letter not in the word
-            }
-        }
-    });
-}
-
-// Check the user's guess and change tile colors based on Wordle rules
-function checkGuess() {
-    const secretArray = secretWord.split('');
-    const guessArray = currentGuess.split('');
-
-    const colorCodes = new Array(5).fill('gray');
-
-    // Step 1: Mark correct positions (Green)
-    for (let i = 0; i < 5; i++) {
-        if (guessArray[i] === secretArray[i]) {
-            colorCodes[i] = 'green';
-            secretArray[i] = null; // Mark the letter in the secret word as "used"
-        }
-    }
-
-    // Step 2: Mark wrong positions (Yellow)
-    for (let i = 0; i < 5; i++) {
-        if (colorCodes[i] === 'green') continue; // Skip already marked green tiles
-        const indexInSecret = secretArray.indexOf(guessArray[i]);
-        if (indexInSecret !== -1) {
-            colorCodes[i] = 'yellow';
-            secretArray[indexInSecret] = null; // Mark the letter in the secret word as "used"
-        }
-    }
-
-    // Step 3: Apply the colors to the tiles with class changes for animation
-    for (let i = 0; i < 5; i++) {
-        const tile = document.getElementById(`row-${currentRow}-col-${i}`);
-        tile.classList.add(colorCodes[i]); // Add the corresponding class for color
-    }
-
-    // Update key colors
-    updateKeyColors(guessArray, secretArray, colorCodes);
-
-    // Check if the guess was correct
-    if (currentGuess === secretWord) {
-        // Stop the timer
-        clearInterval(timer);
-        // Delay the success message by 1 second to allow the colors to show first
+      const cell = cells[currentRow * 5 + index];
+      
+      setTimeout(() => {
+        cell.style.transform = "rotateX(90deg)"; // Flip animation start
         setTimeout(() => {
-            displayMessage(`You got it in ${currentRow + 1} ${currentRow === 0 ? 'try' : 'tries'}! Time taken: ${secondsElapsed}s`);
-        }, 1000);
-    } else {
-        // Increment the timer by 30 seconds for every guess
-        secondsElapsed += 30;
-        currentGuess = '';
-        currentRow++;
-        updateTimerDisplay(); // Update display after incrementing
-
-        if (currentRow === 6) {
-            // Stop the timer if attempts are exhausted
-            clearInterval(timer);
-            setTimeout(() => {
-                displayMessage(`You've used all attempts! The word was: ${secretWord}. Time taken: ${secondsElapsed}s`);
-            }, 1000); // Delay the alert to ensure tile colors are applied before the message
-        }
+          if (letter === targetWord[index]) {
+            cell.classList.add("correct");
+            updateKeyboard(letter, "correct");
+          } else if (targetWord.includes(letter)) {
+            cell.classList.add("present");
+            updateKeyboard(letter, "present");
+          } else {
+            cell.classList.add("absent");
+            updateKeyboard(letter, "absent");
+          }
+          cell.style.transform = "rotateX(0deg)"; // Flip animation end
+        }, 150);
+      }, 250 * index); // Delayed flip for each letter
+    });
+  
+    // Check if player has won or lost
+    if (currentGuess === targetWord) {
+      displayMessage("Congratulations! You've won!");
+      stopTimer();
+      document.removeEventListener("keydown", handleKeyPress);
+    } else if (currentRow === attempts - 1) {
+      displayMessage(`Game over! The word was: ${targetWord}.`);
+      stopTimer();
+      document.removeEventListener("keydown", handleKeyPress);
     }
-}
+  }
+  
+  // Update keyboard color based on feedback
+  function updateKeyboard(letter, status) {
+    const key = [...document.querySelectorAll(".key")].find(key => key.textContent === letter);
+    if (key && (!key.classList.contains("correct") || status === "correct")) {
+      key.className = `key ${status}`;
+    }
+  }
+  
+  // Shake the row for invalid input
+  function shakeRow(row) {
+    const cells = document.querySelectorAll(".cell");
+    for (let i = 0; i < 5; i++) {
+      const cell = cells[row * 5 + i];
+      cell.classList.add("shake");
+      cell.addEventListener("animationend", () => {
+        cell.classList.remove("shake");
+      });
+    }
+  }
+  
